@@ -1,30 +1,30 @@
-import 'Exercicio.dart';
-
-class Treino {
+class Usuario {
   final int? id;
   final String nome;
-  final int usuarioId;
-  List<Exercicio>? exercicios;
+  final String email;
+  final String senha;
 
-  Treino({
+  Usuario({
     this.id,
     required this.nome,
-    required this.usuarioId,
-    this.exercicios,
+    required this.email,
+    required this.senha,
   });
 
-  factory Treino.fromMap(Map<String, dynamic> map) {
-    return Treino(
+  factory Usuario.fromMap(Map<String, dynamic> map) {
+    return Usuario(
       id: map['id'],
       nome: map['nome'],
-      usuarioId: map['usuario_id'],
+      email: map['email'],
+      senha: map['senha'],
     );
   }
 
   Map<String, dynamic> toMap() {
     final map = <String, dynamic>{
       'nome': nome,
-      'usuario_id': usuarioId,
+      'email': email,
+      'senha': senha,
     };
     if (id != null) {
       map['id'] = id;

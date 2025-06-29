@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:trabalho_programacao_mobile_andrei/models/Exercicio.dart';
+import 'package:trabalho_programacao_mobile_andrei/models/HistoricoTreino.dart';
 import 'package:trabalho_programacao_mobile_andrei/models/Treino.dart';
+import 'package:trabalho_programacao_mobile_andrei/screens/telaHistoricoTreino/telaHistoricoTreino.dart';
 import 'package:trabalho_programacao_mobile_andrei/screens/telaTreino/CardExercicio.dart';
-import '../../database/sqlite_controller.dart';
+import 'package:trabalho_programacao_mobile_andrei/database/sqlite_controller.dart';
 
 class TelaTreino extends StatefulWidget {
   const TelaTreino({super.key, required this.treino});
@@ -26,21 +29,70 @@ class _TelaTreinoState extends State<TelaTreino> {
     _carregarExercicios();
   }
 
-  void _carregarExercicios() async {
+  Future<void> _carregarExercicios() async {
     if (_treinoAtual.id != null) {
       final lista = await _sqliteController.getExerciciosByTreino(_treinoAtual.id!);
-      setState(() {
-        exercicios = lista;
-      });
+      setState(() => exercicios = lista);
     }
   }
 
+  void _marcarComoFeito() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF330000),
+        title: const Text(
+          'Marcar como feito',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: const Text(
+          'Deseja marcar esse treino como feito hoje?',
+          style: TextStyle(color: Colors.white),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.white)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (_treinoAtual.id != null) {
+                final historico = HistoricoTreino(
+                  treinoId: _treinoAtual.id!,
+                  data: DateFormat('yyyy-MM-dd').format(DateTime.now()),
+                );
+                await _sqliteController.insertHistoricoTreino(historico);
+              }
+              Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF700000),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('Confirmar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _abrirHistorico() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TelaHistoricoTreino(treino: _treinoAtual),
+      ),
+    );
+  }
+
   void _adicionarExercicio() {
-    final TextEditingController nomeController = TextEditingController();
-    final TextEditingController seriesController = TextEditingController();
-    final TextEditingController repeticoesMinController = TextEditingController();
-    final TextEditingController repeticoesMaxController = TextEditingController();
-    final TextEditingController descansoController = TextEditingController();
+    final nomeController = TextEditingController();
+    final seriesController = TextEditingController();
+    final repeticoesMinController = TextEditingController();
+    final repeticoesMaxController = TextEditingController();
+    final descansoController = TextEditingController();
 
     showDialog(
       context: context,
@@ -50,7 +102,7 @@ class _TelaTreinoState extends State<TelaTreino> {
           borderRadius: BorderRadius.circular(20),
         ),
         title: const Text(
-          'Novo Exercicio',
+          'Novo Exercício',
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -109,9 +161,7 @@ class _TelaTreinoState extends State<TelaTreino> {
         ),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-            },
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Cancelar', style: TextStyle(color: Colors.white)),
           ),
           ElevatedButton(
@@ -137,11 +187,9 @@ class _TelaTreinoState extends State<TelaTreino> {
                   repeticoesMax: repMax,
                   descansoSegundos: descanso,
                 );
-
                 await _sqliteController.insertExercicio(novoExercicio);
-                _carregarExercicios();
+                await _carregarExercicios();
               }
-
               Navigator.of(dialogContext).pop();
             },
             child: const Text('Confirmar', style: TextStyle(color: Colors.white)),
@@ -151,86 +199,66 @@ class _TelaTreinoState extends State<TelaTreino> {
     );
   }
 
-  void _deletarTreino() async {
-    final id = _treinoAtual.id;
-    if (id != null) {
-      await _sqliteController.deleteTreino(id);
-    }
-  }
-
   void _editarTreino() {
     _treinoEditController.text = _treinoAtual.nome;
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF330000),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: const Text(
-          'Alterar nome',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-          ),
-        ),
+        title: const Text('Alterar nome', style: TextStyle(color: Colors.white)),
         content: TextField(
           controller: _treinoEditController,
           style: const TextStyle(color: Colors.white),
         ),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-            },
+            onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancelar', style: TextStyle(color: Colors.white)),
           ),
           ElevatedButton(
+            onPressed: () async {
+              final nome = _treinoEditController.text.trim();
+              if (nome.isNotEmpty && _treinoAtual.id != null) {
+                final atualizado = Treino(
+                  id: _treinoAtual.id,
+                  nome: nome,
+                  usuarioId: _treinoAtual.usuarioId,
+                );
+                await _sqliteController.updateTreino(atualizado);
+                setState(() => _treinoAtual = atualizado);
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('Confirmar', style: TextStyle(color: Colors.white)),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF700000),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
-            onPressed: () async {
-              String nomeTreino = _treinoEditController.text.trim();
-              if (nomeTreino.isNotEmpty && _treinoAtual.id != null) {
-                Treino treinoAtualizado = Treino(
-                  id: _treinoAtual.id,
-                  nome: nomeTreino,
-                );
-                await _sqliteController.updateTreino(treinoAtualizado);
-                setState(() {
-                  _treinoAtual = treinoAtualizado;
-                });
-              }
-              Navigator.of(dialogContext).pop();
-            },
-            child: const Text('Confirmar', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
-    ).then((_) {
-      _treinoEditController.clear();
-    });
+    ).then((_) => _treinoEditController.clear());
+  }
+
+  void _deletarTreino() async {
+    if (_treinoAtual.id != null) {
+      await _sqliteController.deleteTreino(_treinoAtual.id!);
+      Navigator.pop(context, true);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _treinoAtual.nome,
-          style: const TextStyle(color: Colors.white),
-        ),
-        centerTitle: true,
+        title: Text(_treinoAtual.nome, style: const TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xFF700000),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white, size: 25),
-          onPressed: () {
-            Navigator.pop(context, true);
-          },
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context, true),
+          color: Colors.white,
         ),
       ),
       backgroundColor: Colors.black26,
@@ -244,56 +272,62 @@ class _TelaTreinoState extends State<TelaTreino> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   FloatingActionButton(
-                    onPressed: () {},
+                    onPressed: _marcarComoFeito,
+                    heroTag: "marcarComoFeito",
+                    child: const Icon(Icons.check, color: Colors.white),
                     backgroundColor: const Color(0xFF700000),
-                    heroTag: "iniciarTreino",
-                    child: const Icon(Icons.play_arrow, color: Colors.white, size: 24),
+                  ),
+                  FloatingActionButton(
+                    onPressed: _abrirHistorico,
+                    heroTag: "historicoDosTreinos",
+                    child: const Icon(Icons.hourglass_bottom, color: Colors.white),
+                    backgroundColor: const Color(0xFF700000),
                   ),
                   FloatingActionButton(
                     onPressed: _adicionarExercicio,
-                    backgroundColor: const Color(0xFF700000),
                     heroTag: "adicionarExercicio",
-                    child: const Icon(Icons.add, color: Colors.white, size: 24),
+                    child: const Icon(Icons.add, color: Colors.white),
+                    backgroundColor: const Color(0xFF700000),
                   ),
-                  const SizedBox(width: 50),
                   FloatingActionButton(
                     onPressed: _editarTreino,
-                    backgroundColor: const Color(0xFF700000),
                     heroTag: "editarTreino",
-                    child: const Icon(Icons.edit, color: Colors.white, size: 24),
+                    child: const Icon(Icons.edit, color: Colors.white),
+                    backgroundColor: const Color(0xFF700000),
                   ),
                   FloatingActionButton(
-                    onPressed: () {
-                      _deletarTreino();
-                      Navigator.pop(context, true);
-                    },
-                    backgroundColor: const Color(0xFF700000),
+                    onPressed: _deletarTreino,
                     heroTag: "deletarTreino",
-                    child: const Icon(Icons.delete, color: Colors.white, size: 24),
+                    child: const Icon(Icons.delete, color: Colors.white),
+                    backgroundColor: const Color(0xFF700000),
                   ),
                 ],
               ),
               const SizedBox(height: 30),
               Expanded(
-                child: (exercicios.isEmpty)
+                child: exercicios.isEmpty
                     ? const Center(
-                  child: Text(
-                    "Nenhum exercício adicionado!",
-                    style: TextStyle(color: Colors.white),
-                  ),
+                  child: Text("Nenhum exercício adicionado!", style: TextStyle(color: Colors.white)),
                 )
                     : ListView.builder(
                   itemCount: exercicios.length,
-                  itemBuilder: (context, index) {
-                    final exercicio = exercicios[index];
-                    return CardExercicio(exercicio: exercicio);
-                  },
+                  itemBuilder: (ctx, i) => CardExercicio(
+                    key: ValueKey(exercicios[i].id),
+                    exercicio: exercicios[i],
+                    onRefresh: _carregarExercicios,
+                  ),
                 ),
-              ),
+              )
             ],
           ),
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _treinoEditController.dispose();
+    super.dispose();
   }
 }

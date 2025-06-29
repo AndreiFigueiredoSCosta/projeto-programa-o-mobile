@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:trabalho_programacao_mobile_andrei/models/Treino.dart';
+import 'package:trabalho_programacao_mobile_andrei/models/Usuario.dart';
 import 'package:trabalho_programacao_mobile_andrei/database/sqlite_controller.dart';
 import 'package:trabalho_programacao_mobile_andrei/screens/telaTreino/TelaTreino.dart';
 
 class Home extends StatefulWidget {
-  const Home({super.key});
+  final Usuario usuario;
+  const Home({super.key, required this.usuario});
 
   @override
   State<Home> createState() => _HomeState();
@@ -13,68 +15,133 @@ class Home extends StatefulWidget {
 class _HomeState extends State<Home> {
   final SqliteController _sqliteController = SqliteController();
   final TextEditingController _treinoEditController = TextEditingController();
+
   List<Treino> treinos = [];
 
   @override
   void initState() {
     super.initState();
-    _carregarTreinos();
+    _loadTreinos();
   }
 
-  Future<void> _carregarTreinos() async {
-    final lista = await _sqliteController.getTreinos();
+  Future<void> _loadTreinos() async {
+    final list = await _sqliteController.getTreinosByUsuario(widget.usuario.id!);
     setState(() {
-      treinos = lista;
+      treinos = list;
     });
+  }
+
+  Future<void> _addTreino() async {
+    _treinoEditController.clear();
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Color(0xFF330000),
+        title: const Text(
+            'Novo Treino',
+            style: TextStyle( color: Colors.white),
+        ),
+        content: TextField(
+          controller: _treinoEditController,
+          decoration: InputDecoration(
+              labelText: 'Nome do treino',
+              labelStyle: TextStyle(color: Colors.white)
+          ),
+          style: TextStyle(color: Colors.white),
+        ),
+        actions: [
+          TextButton(onPressed: () =>
+              Navigator.pop(ctx),
+              child: const Text(
+                  'Cancelar',
+                  style: TextStyle(color: Colors.white),
+              )
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final nome = _treinoEditController.text.trim();
+              if (nome.isNotEmpty) {
+                await _sqliteController.insertTreino(
+                  Treino(nome: nome, usuarioId: widget.usuario.id!),
+                );
+                await _loadTreinos();
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text(
+                'Criar',
+                style: TextStyle(color: Colors.white),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF700000),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _logout() {
+    Navigator.pushReplacementNamed(context, '/login');
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Meus treinos", style: TextStyle(color: Colors.white)),
-        centerTitle: true,
+        title: Text(
+            'Treinos de ${widget.usuario.nome}',
+            style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: const Color(0xFF700000),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: _logout,
+            tooltip: 'Logout',
+            color: Colors.white,
+          ),
+        ],
       ),
       backgroundColor: Colors.black26,
       body: treinos.isEmpty
-          ? Center(
-        child: Text("Nenhum treino cadastrado", style: TextStyle(color: Colors.white)),
+          ? const Center(
+        child: Text(
+          "Nenhum treino cadastrado",
+          style: TextStyle(color: Colors.white),
+        ),
       )
           : ListView.builder(
+        padding: const EdgeInsets.only(top: 20),
         itemCount: treinos.length,
-        itemBuilder: (context, index) {
-          final treino = treinos[index];
+        itemBuilder: (ctx, i) {
+          final t = treinos[i];
           return Padding(
-            padding: EdgeInsets.only(top: 20),
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical:5, horizontal: 20),
-              child: InkWell(
-                onTap: () async {
-                  final resultado = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => TelaTreino(treino: treino),
-                    ),
-                  );
-
-                  if (resultado == true) {
-                    _carregarTreinos();
-                  }
-                },
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Color(0xFF700000),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  padding: EdgeInsets.symmetric(vertical: 20, horizontal: 10),
-                  child: Text(
-                    treino.nome,
-                    style: TextStyle(
-                        fontSize: 24,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.center,
+            padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 20),
+            child: InkWell(
+              onTap: () async {
+                final changed = await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => TelaTreino(treino: t)),
+                );
+                if (changed == true) _loadTreinos();
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF700000),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
+                child: Text(
+                  t.nome,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
@@ -83,7 +150,7 @@ class _HomeState extends State<Home> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showPopup,
+        onPressed: _addTreino,
         heroTag: "adicionarTreino",
         backgroundColor: const Color(0xFF700000),
         child: const Icon(Icons.add, color: Colors.white),
@@ -91,55 +158,9 @@ class _HomeState extends State<Home> {
     );
   }
 
-  void _showPopup() {
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: const Color(0xFF330000),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: const Text(
-          'Novo Treino',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-          ),
-        ),
-        content: TextField(
-          controller: _treinoEditController,
-          style: const TextStyle(color: Colors.white),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-            },
-            child: const Text('Cancelar', style: TextStyle(color: Colors.white)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF700000),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            onPressed: () async {
-              String nomeTreino = _treinoEditController.text.trim();
-              if (nomeTreino.isNotEmpty) {
-                Treino novoTreino = Treino(nome: nomeTreino);
-                await _sqliteController.insertTreino(novoTreino);
-                await _carregarTreinos(); // atualiza a lista
-              }
-              Navigator.of(dialogContext).pop();
-            },
-            child: const Text('Confirmar', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    ).then((_) {
-      _treinoEditController.clear();
-    });
+  @override
+  void dispose() {
+    _treinoEditController.dispose();
+    super.dispose();
   }
 }

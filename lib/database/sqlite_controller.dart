@@ -1,16 +1,15 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
-import 'package:trabalho_programacao_mobile_andrei/models/Treino.dart';
 import 'package:trabalho_programacao_mobile_andrei/models/Exercicio.dart';
-import 'package:trabalho_programacao_mobile_andrei/models/Serie.dart';
+import 'package:trabalho_programacao_mobile_andrei/models/Treino.dart';
+import 'package:trabalho_programacao_mobile_andrei/models/Usuario.dart';
+import 'package:trabalho_programacao_mobile_andrei/models/HistoricoTreino.dart';
 
 class SqliteController {
   static final SqliteController _instance = SqliteController._internal();
   static Database? _db;
 
-  factory SqliteController() {
-    return _instance;
-  }
+  factory SqliteController() => _instance;
 
   SqliteController._internal();
 
@@ -19,17 +18,32 @@ class SqliteController {
 
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'treino_app.db');
+
     _db = await openDatabase(
       path,
       version: 1,
       onCreate: (db, version) async {
+        print('Criando tabela usuario...');
+        await db.execute('''
+          CREATE TABLE usuario (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            email TEXT NOT NULL UNIQUE,
+            senha TEXT NOT NULL
+          );
+        ''');
+
+        print('Criando tabela treino...');
         await db.execute('''
           CREATE TABLE treino (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL
+            nome TEXT NOT NULL,
+            usuario_id INTEGER NOT NULL,
+            FOREIGN KEY (usuario_id) REFERENCES usuario(id) ON DELETE CASCADE
           )
         ''');
 
+        print('Criando tabela exercicio...');
         await db.execute('''
           CREATE TABLE exercicio (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,26 +57,48 @@ class SqliteController {
           )
         ''');
 
+        print('Criando tabela historico_treino...');
         await db.execute('''
-          CREATE TABLE serie (
+          CREATE TABLE historico_treino (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            exercicio_id INTEGER NOT NULL,
-            numero_serie INTEGER NOT NULL,
-            carga REAL NOT NULL,
-            repeticoes INTEGER NOT NULL,
+            treino_id INTEGER NOT NULL,
             data TEXT NOT NULL,
-            FOREIGN KEY (exercicio_id) REFERENCES exercicio(id) ON DELETE CASCADE
+            FOREIGN KEY (treino_id) REFERENCES treino(id) ON DELETE CASCADE
           )
         ''');
+
+        print('Banco de dados criado com sucesso.');
       },
     );
   }
 
   Database get db {
     if (_db == null) {
-      throw Exception('Banco de dados não foi inicializado. Chame initDb() antes de usar.');
+      throw Exception('Banco não iniciado. Chame initDb().');
     }
     return _db!;
+  }
+
+  // --- USUÁRIOS ---
+  Future<void> insertUsuario(Usuario usuario) async {
+    await db.insert('usuario', usuario.toMap());
+    printDatabase();
+  }
+
+  Future<Usuario?> getUsuarioById(int id) async {
+    final result = await db.query('usuario', where: 'id = ?', whereArgs: [id]);
+    if (result.isEmpty) return null;
+    return Usuario.fromMap(result.first);
+  }
+
+  Future<Usuario?> getUsuarioByEmail(String email) async {
+    final res = await db.query(
+      'usuario',
+      where: 'email = ?',
+      whereArgs: [email],
+    );
+    if (res.isEmpty) return null;
+    return Usuario.fromMap(res.first);
   }
 
   // --- TREINOS ---
@@ -73,6 +109,11 @@ class SqliteController {
 
   Future<List<Treino>> getTreinos() async {
     final result = await db.query('treino');
+    return result.map((e) => Treino.fromMap(e)).toList();
+  }
+
+  Future<List<Treino>> getTreinosByUsuario(int usuarioId) async {
+    final result = await db.query('treino', where: 'usuario_id = ?', whereArgs: [usuarioId]);
     return result.map((e) => Treino.fromMap(e)).toList();
   }
 
@@ -107,38 +148,39 @@ class SqliteController {
     printDatabase();
   }
 
-  // --- SÉRIES ---
-  Future<void> insertSerie(Serie serie) async {
-    await db.insert('serie', serie.toMap());
+  // --- HISTÓRICO DE TREINOS ---
+  Future<void> insertHistoricoTreino(HistoricoTreino historico) async {
+    await db.insert('historico_treino', historico.toMap());
     printDatabase();
   }
 
-  Future<List<Serie>> getSeriesByExercicio(int exercicioId) async {
+  Future<List<HistoricoTreino>> getHistoricoByTreino(int treinoId) async {
     final result = await db.query(
-      'serie',
-      where: 'exercicio_id = ?',
-      whereArgs: [exercicioId],
-      orderBy: 'data DESC, numero_serie ASC',
+      'historico_treino',
+      where: 'treino_id = ?',
+      whereArgs: [treinoId],
+      orderBy: 'data DESC',
     );
-    return result.map((e) => Serie.fromMap(e)).toList();
+    return result.map((e) => HistoricoTreino.fromMap(e)).toList();
   }
 
-  Future<void> updateSerie(Serie serie) async {
-    await db.update('serie', serie.toMap(), where: 'id = ?', whereArgs: [serie.id]);
-    printDatabase();
-  }
-
-  Future<void> deleteSerie(int id) async {
-    await db.delete('serie', where: 'id = ?', whereArgs: [id]);
+  Future<void> deleteHistoricoTreino(int id) async {
+    await db.delete('historico_treino', where: 'id = ?', whereArgs: [id]);
     printDatabase();
   }
 
   // --- DEBUG ---
   Future<void> printDatabase() async {
+    print('--- Usuários ---');
+    final usuarios = await db.query('usuario');
+    for (var u in usuarios) {
+      print('ID: ${u['id']}, Nome: ${u['nome']}');
+    }
+
     print('--- Treinos ---');
     final treinos = await db.query('treino');
     for (var t in treinos) {
-      print('ID: ${t['id']}, Nome: ${t['nome']}');
+      print('ID: ${t['id']}, Nome: ${t['nome']}, Usuário ID: ${t['usuario_id']}');
     }
 
     print('--- Exercícios ---');
@@ -147,10 +189,10 @@ class SqliteController {
       print('ID: ${e['id']}, Nome: ${e['nome']}, Treino ID: ${e['treino_id']}');
     }
 
-    print('--- Séries ---');
-    final series = await db.query('serie');
-    for (var s in series) {
-      print('ID: ${s['id']}, Carga: ${s['carga']}, Reps: ${s['repeticoes']}, Exercicio ID: ${s['exercicio_id']}');
+    print('--- Histórico de Treinos ---');
+    final historicos = await db.query('historico_treino');
+    for (var h in historicos) {
+      print('ID: ${h['id']}, Treino ID: ${h['treino_id']}, Data: ${h['data']}');
     }
   }
 }

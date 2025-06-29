@@ -1,5 +1,3 @@
-import 'Serie.dart';
-
 class Exercicio {
   int? id;
   int treinoId;
@@ -8,7 +6,6 @@ class Exercicio {
   int repeticoesMin;
   int repeticoesMax;
   int descansoSegundos;
-  List<Serie>? listaSeries; // <- Adiciona a lista
 
   Exercicio({
     this.id,
@@ -18,7 +15,6 @@ class Exercicio {
     required this.repeticoesMin,
     required this.repeticoesMax,
     required this.descansoSegundos,
-    this.listaSeries,
   });
 
   Map<String, dynamic> toMap() {
