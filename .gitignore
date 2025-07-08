@@ -1,3 +1,5 @@
+*.hprof
+
 # Miscellaneous
 *.class
 *.log
